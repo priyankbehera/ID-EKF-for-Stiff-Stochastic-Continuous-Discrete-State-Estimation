@@ -159,7 +159,7 @@ class IDEKF:
     def _ensure_initialized(self, x: np.ndarray, P: np.ndarray):
         if not self._initialized:
             self.u = x.reshape(-1, 1)
-            V, B = cov_to_inf(P)
+            V, B = cov_to_inf(P.shape[0], P)
             self.V, self.B = V, B
             self._initialized = True
 
