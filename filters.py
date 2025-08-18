@@ -1,6 +1,5 @@
 
 import numpy as np
-from IDKalman import KalmanObject
 
 def symmetrize(P):
     return 0.5*(P + P.T)

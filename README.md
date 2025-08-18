@@ -1,5 +1,5 @@
 
-ID-EKF vs EKF/UKF/CKF — Discretization-First (Ito–Taylor 1.5) Benchmark
+ID-EKF vs EKF/UKF/CKF
 ======================================================================
 
 This project builds a common discrete-time model from a continuous-time SDE using the

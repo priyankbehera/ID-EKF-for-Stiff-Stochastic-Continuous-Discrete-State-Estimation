@@ -1,7 +1,7 @@
 import numpy as np
-from INFtoCOV import inf_to_cov
-from Mupdate import mupdate
-from Tupdate import tupdate
+from .INFtoCOV import inf_to_cov
+from .Mupdate import mupdate
+from .Tupdate import tupdate
 
 class IDEKF:
     """
