@@ -141,6 +141,24 @@ from IDKalman.Mupdate import mupdate
 from IDKalman.Tupdate import tupdate
 from IDKalman.COVtoINF import cov_to_inf
 
+def _compute_Hk_zhat(self, x_vec: np.ndarray):
+    x_col = x_vec.reshape(-1, 1)
+    Hk, zhat = None, None
+
+    if callable(self.h):
+        out = np.asarray(self.h(x_vec))
+        if out.ndim == 2 and out.shape == (self._m, self._n):
+            Hk = out
+            zhat = Hk @ x_col
+        else:
+            zhat = out.reshape(-1, 1)
+    if Hk is None:
+        Hk = self.H_fun(x_vec) if callable(self.H_fun) else np.asarray(self.H_fun)
+    if zhat is None:
+        zhat = Hk @ x_col
+    return Hk, zhat
+
+
 class IDEKF:
     def __init__(self, dm, h_fun, H_fun, R):
         self.dm = dm          # DiscreteModel with g(x), F(x), Q
@@ -181,19 +199,16 @@ class IDEKF:
         return x_pred, P_pred
 
     def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z):
-        Hk = self.H_fun(x_pred)
         z = np.asarray(z).reshape(-1, 1)
+        Hk, zhat = self._compute_Hk_zhat(x_pred)
 
-        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, self.h)
+
+        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, Hk)
         self.u, self.V, self.B = out[0], out[1], out[2]
 
         x_upd = self.u.ravel()
         P_upd = inf_to_cov(self.V, self.B, self._n)
 
-        if self.h is None:
-            zhat = Hk @ x_pred.reshape(-1, 1)
-        else:
-            zhat = np.asarray(self.h(x_pred)).reshape(-1, 1)
         y = (z - zhat).ravel()
         S = Hk @ P_pred @ Hk.T + self.R
 

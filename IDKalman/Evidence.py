@@ -43,8 +43,12 @@ def evidence(u, B, V, X1, n0, n1, n2, du):
     """
 
     K = np.zeros((n0, n1))
+    '''
+    print('X1')
     print(X1)
+    print('u')
     print(u)
+    '''
     for j in range(n1):
         B, V = reversal(B, V, 0, n0 + j, 1, n1 - j + n2)
 
