@@ -1,4 +1,3 @@
-
 import os, numpy as np, matplotlib.pyplot as plt
 from models import dahlquist_f, dahlquist_J, dahlquist_h, dahlquist_H, vdp_f, vdp_J, vdp_h, vdp_H
 from discretization import simulate_sde_it15
