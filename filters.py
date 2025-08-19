@@ -146,10 +146,14 @@ class IDEKF:
         self.dm = dm          # DiscreteModel with g(x), F(x), Q
         self.h = h_fun        # measurement function h(x)  (can be None for linear)
         self.H_fun = H_fun    # function returning H(x)
-        self.R = R
+        self.R = np.asarray(R)
 
-        self._n = dm.Q.shape[0]
-        self._m = R.shape[0]
+        # --- dimensions (this is what you keep) ---
+        assert self.R.shape[0] == self.R.shape[1], "R must be (m,m)"
+        assert dm.Q.shape[0] == dm.Q.shape[1], "dm.Q must be (n,n)"
+        self._n = dm.Q.shape[0]      # state dim n
+        self._m = self.R.shape[0]    # meas dim m
+        # ------------------------------------------
 
         self.u = None                 # (n,1)
         self.V = None                 # (n,1)
@@ -160,7 +164,7 @@ class IDEKF:
         if not self._initialized:
             self.u = x.reshape(-1, 1)
             B, V, _ = cov_to_inf(P, P.shape[0])
-            self.V, self.B = V, B
+            self.B, self.V = B, V
             self._initialized = True
 
     def predict(self, x: np.ndarray, P: np.ndarray):
@@ -174,7 +178,6 @@ class IDEKF:
 
         x_pred = self.u.ravel()
         P_pred = inf_to_cov(self.V, self.B, self._n)
-        P_pred = symmetrize(P_pred)               
         return x_pred, P_pred
 
     def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z):
@@ -186,13 +189,12 @@ class IDEKF:
 
         x_upd = self.u.ravel()
         P_upd = inf_to_cov(self.V, self.B, self._n)
-        P_upd = symmetrize(P_upd)
 
         if self.h is None:
             zhat = Hk @ x_pred.reshape(-1, 1)
         else:
             zhat = np.asarray(self.h(x_pred)).reshape(-1, 1)
         y = (z - zhat).ravel()
-        S = symmetrize(Hk @ P_pred @ Hk.T + self.R)
+        S = Hk @ P_pred @ Hk.T + self.R
 
         return x_upd, P_upd, y, S
