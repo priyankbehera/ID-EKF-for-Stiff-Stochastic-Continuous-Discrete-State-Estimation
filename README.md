@@ -4,7 +4,7 @@ ID-EKF vs EKF/UKF/CKF
 
 This project builds a common discrete-time model from a continuous-time SDE using the
 Ito–Taylor strong order 1.5 (IT-1.5) scheme (additive noise), then compares EKF, UKF, CKF,
-and a placeholder ID-EKF.
+against the Influence Diagram Version of the EKF (ID-EKF)
 
 Run from `experiments/`:
 - python run_armse.py
