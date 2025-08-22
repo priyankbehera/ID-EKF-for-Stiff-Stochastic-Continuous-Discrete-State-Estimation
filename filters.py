@@ -12,6 +12,19 @@ def ensure_psd(P, eps=1e-10):
     except np.linalg.LinAlgError:
         return P + (10*eps)*np.eye(P.shape[0])
 
+def safe_cholesky(A, eps=1e-12, max_tries=6):
+    A = symmetrize(A)
+    I = np.eye(A.shape[0])
+    for i in range(max_tries):
+        try:
+            return np.linalg.cholesky(A + (10.0**i) * eps * I)
+        except np.linalg.LinAlgError:
+            pass
+    # Fallback: eigen clip
+    w, V = np.linalg.eigh(symmetrize(A))
+    w = np.clip(w, eps, None)
+    return V @ np.diag(np.sqrt(w))
+
 class DiscreteModel:
     def __init__(self, g_fun, F_fun, Qk):
         self.g = g_fun
@@ -45,11 +58,14 @@ def unscented_points(x, P, alpha=1e-3, beta=2.0, kappa=0.0):
     n = x.shape[0]
     lam = alpha**2 * (n + kappa) - n
     c = n + lam
+    P = ensure_psd(P)
+    if not np.all(np.isfinite(P)):
+        P = np.eye(n) * 1e-6
+    U = safe_cholesky((c) * P)
     Wm = np.full(2*n + 1, 1.0 / (2*c))
     Wc = np.full(2*n + 1, 1.0 / (2*c))
     Wm[0] = lam / c
     Wc[0] = lam / c + (1 - alpha**2 + beta)
-    U = np.linalg.cholesky((c) * P)
     Xi = np.zeros((2*n + 1, n))
     Xi[0] = x
     for i in range(n):
@@ -93,8 +109,11 @@ class UKF:
 
 def cubature_points(x, P):
     n = x.shape[0]
+    P = ensure_psd(P)
+    if not np.all(np.isfinite(P)):
+        P = np.eye(n) * 1e-6
+    U = safe_cholesky(P)  
     Xi = np.zeros((2*n, n))
-    U = np.linalg.cholesky(P)
     for i in range(n):
         Xi[i] = x + np.sqrt(n) * U[:, i]
         Xi[n + i] = x - np.sqrt(n) * U[:, i]
@@ -141,25 +160,27 @@ from IDKalman.Mupdate import mupdate
 from IDKalman.Tupdate import tupdate
 from IDKalman.COVtoINF import cov_to_inf
 
-def _compute_Hk_zhat(self, x_vec: np.ndarray):
-    x_col = x_vec.reshape(-1, 1)
-    Hk, zhat = None, None
-
-    if callable(self.h):
-        out = np.asarray(self.h(x_vec))
-        if out.ndim == 2 and out.shape == (self._m, self._n):
-            Hk = out
-            zhat = Hk @ x_col
-        else:
-            zhat = out.reshape(-1, 1)
-    if Hk is None:
-        Hk = self.H_fun(x_vec) if callable(self.H_fun) else np.asarray(self.H_fun)
-    if zhat is None:
-        zhat = Hk @ x_col
-    return Hk, zhat
-
 
 class IDEKF:
+    def _compute_Hk_zhat(self, x_vec: np.ndarray):
+        x_col = x_vec.reshape(-1, 1)
+        Hk, zhat = None, None
+        if callable(self.h):
+            out = np.asarray(self.h(x_vec))
+            if out.ndim == 2 and out.shape == (self._m, self._n):
+                # h == Jacobian
+                Hk = out
+                zhat = Hk @ x_col
+            else:
+                # h == measurement function
+                zhat = out.reshape(-1, 1)
+        if Hk is None:
+            Hk = self.H_fun(x_vec) if callable(self.H_fun) else np.asarray(self.H_fun)
+        if zhat is None:
+            zhat = Hk @ x_col
+        return Hk, zhat
+
+    
     def __init__(self, dm, h_fun, H_fun, R):
         self.dm = dm          # DiscreteModel with g(x), F(x), Q
         self.h = h_fun        # measurement function h(x)  (can be None for linear)
@@ -195,7 +216,7 @@ class IDEKF:
         self.u, self.B, self.V = tupdate(self.u, self.B, self.V, Phi_k, gamma_k, Q_k)
 
         x_pred = self.u.ravel()
-        P_pred = inf_to_cov(self.V, self.B, self._n)
+        P_pred = ensure_psd(inf_to_cov(self.V, self.B, self._n))
         return x_pred, P_pred
 
     def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z):
@@ -203,13 +224,13 @@ class IDEKF:
         Hk, zhat = self._compute_Hk_zhat(x_pred)
 
 
-        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, Hk)
+        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, None)
         self.u, self.V, self.B = out[0], out[1], out[2]
 
         x_upd = self.u.ravel()
-        P_upd = inf_to_cov(self.V, self.B, self._n)
-
+        P_upd = ensure_psd(inf_to_cov(self.V, self.B, self._n))
+        
         y = (z - zhat).ravel()
-        S = Hk @ P_pred @ Hk.T + self.R
+        S = ensure_psd(Hk @ P_pred @ Hk.T + self.R)
 
         return x_upd, P_upd, y, S

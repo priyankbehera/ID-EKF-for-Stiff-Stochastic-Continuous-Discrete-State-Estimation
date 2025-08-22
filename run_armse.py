@@ -47,7 +47,9 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
 
         for i in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1<<32))
-            ts, xs = simulate_sde_it15(x0, t0, tf, dt, f, Jf, G, rng, refine=10)
+            ts, xs = simulate_sde_it15(x0, t0, tf, dt, f, Jf, G, rng, refine=100)
+            if not np.all(np.isfinite(xs)):                                     
+                continue
             zs = np.zeros((xs.shape[0], R.shape[0]))
             for k in range(xs.shape[0]):
                 zs[k] = h(xs[k]) + np.linalg.cholesky(R) @ rng.normal(size=R.shape[0])
@@ -75,10 +77,14 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
             for name in trajs_est.keys():
                 trajs_est[name][i] = Xs[name]
 
-        # ARMSE per filter
-        results[dt] = {name: float(np.sqrt(np.mean(np.sum((trajs_est[name]-trajs_true)**2, axis=2))))
-                       for name in trajs_est.keys()}
-
+        results[dt] = {}
+        for name in trajs_est.keys():                                              # <<< NEW
+            err = trajs_est[name] - trajs_true                                    # <<< NEW
+            err2 = np.sum(err**2, axis=2)                                         # (runs, T)  <<< NEW
+            results[dt][name] = float(np.sqrt(np.nanmean(err2)))                  # <<< NEW
+        valid_runs = int(np.isfinite(trajs_true).all(axis=(1,2)).sum())           # <<< NEW
+        print(f"dt={dt}: valid runs = {valid_runs}/{N_runs}") 
+        
         labels = list(trajs_est.keys())
         vals = [results[dt][lab] for lab in labels]
         import csv
