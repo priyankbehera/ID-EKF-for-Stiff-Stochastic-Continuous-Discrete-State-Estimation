@@ -11,7 +11,8 @@ def build_discrete_model(f, Jf, G, dt):
         J = Jf(x, 0.0)
         return x + dx*dt + 0.5*(J @ dx)*(dt**2)
     def F(x):
-        return np.eye(x.shape[0]) + Jf(x, 0.0)*dt
+        J = Jf(x, 0.0)
+        return np.eye(J.shape[0]) + J*dt + 0.5*(J @ J)*(dt**2)
     Qd = G @ G.T * dt
     return DiscreteModel(g, F, Qd)
 

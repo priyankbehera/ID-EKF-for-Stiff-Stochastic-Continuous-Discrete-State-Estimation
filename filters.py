@@ -48,7 +48,7 @@ class EKF:
         H = self.H(x_pred)
         y = z - self.h(x_pred)
         S = ensure_psd(H @ P_pred @ H.T + self.R)
-        K = P_pred @ H.T @ np.linalg.inv(S)
+        K = P_pred @ H.T @ np.linalg.solve(S)
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
         return x_upd, P_upd, y, S
@@ -101,7 +101,7 @@ class UKF:
             dx = (Xi[i] - x_pred).reshape(-1,1)
             S += Wc[i] * (dz @ dz.T)
             Pxz += Wc[i] * (dx @ dz.T)
-        K = Pxz @ np.linalg.inv(S)
+        K = Pxz @ np.linalg.solve(S)
         y = z - z_pred
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
@@ -147,7 +147,7 @@ class CKF:
             dx = (Xi[i] - x_pred).reshape(-1,1)
             S += W[i] * (dz @ dz.T)
             Pxz += W[i] * (dx @ dz.T)
-        K = Pxz @ np.linalg.inv(S)
+        K = Pxz @ np.linalg.solve(S)
         y = z - z_pred
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
@@ -162,6 +162,16 @@ from IDKalman.COVtoINF import cov_to_inf
 
 
 class IDEKF:
+    def _num_jacobian_g(self, x, eps=1e-6):
+        x = np.asarray(x, dtype=float)
+        n = x.size
+        fx = np.asarray(self.dm.g(x))
+        J = np.zeros((n, n))
+        for i in range(n):
+            d = np.zeros(n); d[i] = eps
+            J[:, i] = (np.asarray(self.dm.g(x + d)) - fx) / eps
+        return J
+
     def _compute_Hk_zhat(self, x_vec: np.ndarray):
         x_col = x_vec.reshape(-1, 1)
         Hk, zhat = None, None
@@ -209,7 +219,7 @@ class IDEKF:
     def predict(self, x: np.ndarray, P: np.ndarray):
         self._ensure_initialized(x, P)
 
-        Phi_k = self.dm.F(x)                    
+        Phi_k   = self._num_jacobian_g(x)        
         gamma_k = np.eye(self._n)
         Q_k = self.dm.Q
 
