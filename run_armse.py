@@ -20,7 +20,7 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
     results = {}
     for dt in dt_list:
         if model_name == "dahlquist":
-            mu, j = -1e4, 3
+            mu, j = -1e2, 1
             f, Jf = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G = np.array([[1.0]])
             x0 = np.array([1.0])
@@ -39,11 +39,14 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
         else:
             raise ValueError("unknown model")
 
+        chol_R = np.linalg.cholesky(R)
+        
         dm = build_discrete_model(f, Jf, G, dt)
 
         T_steps = int(np.ceil((tf - t0)/dt)) + 1
-        trajs_true = np.zeros((N_runs, T_steps, x0.shape[0]))
-        trajs_est  = {k: np.zeros((N_runs, T_steps, x0.shape[0])) for k in ["EKF","UKF","CKF","IDEKF"]}
+        state_dim = x0.shape[0]
+        trajs_true = np.full((N_runs, T_steps, state_dim), np.nan)
+        trajs_est  = {k: np.full((N_runs, T_steps, state_dim), np.nan) for k in ["EKF","UKF","CKF","IDEKF"]}
 
         for i in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1<<32))
@@ -52,7 +55,7 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
                 continue
             zs = np.zeros((xs.shape[0], R.shape[0]))
             for k in range(xs.shape[0]):
-                zs[k] = h(xs[k]) + np.linalg.cholesky(R) @ rng.normal(size=R.shape[0])
+                zs[k] = h(xs[k]) + chol_R @ rng.normal(size=R.shape[0])
             trajs_true[i] = xs
 
             x_init = x0 + 0.1*rng.normal(size=x0.shape[0])
@@ -78,13 +81,12 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
                 trajs_est[name][i] = Xs[name]
 
         results[dt] = {}
-        for name in trajs_est.keys():                                              # <<< NEW
-            err = trajs_est[name] - trajs_true                                    # <<< NEW
-            err2 = np.sum(err**2, axis=2)                                         # (runs, T)  <<< NEW
-            results[dt][name] = float(np.sqrt(np.nanmean(err2)))                  # <<< NEW
-        valid_runs = int(np.isfinite(trajs_true).all(axis=(1,2)).sum())           # <<< NEW
+        for name in trajs_est.keys():
+            err2 = np.sum((trajs_est[name] - trajs_true)**2, axis=2)  # (runs, T)
+            results[dt][name] = float(np.sqrt(np.nanmean(err2)))                
+        valid_runs = int(np.isfinite(trajs_true).all(axis=(1,2)).sum())           
         print(f"dt={dt}: valid runs = {valid_runs}/{N_runs}") 
-        
+
         labels = list(trajs_est.keys())
         vals = [results[dt][lab] for lab in labels]
         import csv
