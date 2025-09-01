@@ -43,7 +43,7 @@ def mupdate(k, Z, u, B_or_sigma, V, R, H, h=None):
     n2 = 0
     u_new = np.vstack((u, H @ u))
     if h is not None:
-        u_new = np.vstack((u, h))
+        u_new = np.vstack((u, h(u)))
 
 
     # Construct V_new to structure

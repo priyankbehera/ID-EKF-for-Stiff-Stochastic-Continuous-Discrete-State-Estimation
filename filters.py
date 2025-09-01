@@ -48,7 +48,7 @@ class EKF:
         H = self.H(x_pred)
         y = z - self.h(x_pred)
         S = ensure_psd(H @ P_pred @ H.T + self.R)
-        K = P_pred @ H.T @ np.linalg.solve(S)
+        K = P_pred @ H.T @ np.linalg.inv(S)
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
         return x_upd, P_upd, y, S
@@ -101,7 +101,7 @@ class UKF:
             dx = (Xi[i] - x_pred).reshape(-1,1)
             S += Wc[i] * (dz @ dz.T)
             Pxz += Wc[i] * (dx @ dz.T)
-        K = Pxz @ np.linalg.solve(S)
+        K = Pxz @ np.linalg.inv(S)
         y = z - z_pred
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
@@ -147,7 +147,7 @@ class CKF:
             dx = (Xi[i] - x_pred).reshape(-1,1)
             S += W[i] * (dz @ dz.T)
             Pxz += W[i] * (dx @ dz.T)
-        K = Pxz @ np.linalg.solve(S)
+        K = Pxz @ np.linalg.inv(S)
         y = z - z_pred
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
@@ -193,8 +193,8 @@ class IDEKF:
     
     def __init__(self, dm, h_fun, H_fun, R):
         self.dm = dm          # DiscreteModel with g(x), F(x), Q
-        self.h = h_fun        # measurement function h(x)  (can be None for linear)
-        self.H_fun = H_fun    # function returning H(x)
+        self.h_fun = h_fun        # measurement function h(x)  (can be None for linear)
+        self.H_jac = H_fun    # Jacobian evaluated
         self.R = np.asarray(R)
 
         # --- dimensions (this is what you keep) ---
@@ -219,11 +219,13 @@ class IDEKF:
     def predict(self, x: np.ndarray, P: np.ndarray):
         self._ensure_initialized(x, P)
 
-        Phi_k   = self._num_jacobian_g(x)        
+
+        Phi_k   = self.dm.g(x) 
+        B, V, _ = cov_to_inf(P, self._n)       
         gamma_k = np.eye(self._n)
         Q_k = self.dm.Q
 
-        self.u, self.B, self.V = tupdate(self.u, self.B, self.V, Phi_k, gamma_k, Q_k)
+        self.u, self.B, self.V = tupdate(x, B, V, Phi_k, gamma_k, Q_k)
 
         x_pred = self.u.ravel()
         P_pred = ensure_psd(inf_to_cov(self.V, self.B, self._n))
@@ -231,16 +233,14 @@ class IDEKF:
 
     def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z):
         z = np.asarray(z).reshape(-1, 1)
-        Hk, zhat = self._compute_Hk_zhat(x_pred)
 
-
-        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, None)
+        out = mupdate(0, z, self.u, self.B, self.V, self.R, self.H_jac, self.h_fun)
         self.u, self.V, self.B = out[0], out[1], out[2]
 
         x_upd = self.u.ravel()
         P_upd = ensure_psd(inf_to_cov(self.V, self.B, self._n))
         
-        y = (z - zhat).ravel()
-        S = ensure_psd(Hk @ P_pred @ Hk.T + self.R)
+        y = (z - self.h_fun(x_pred)).ravel()
+        S = ensure_psd(self.H_jac @ P_pred @ self.H_jac.T + self.R)
 
         return x_upd, P_upd, y, S
