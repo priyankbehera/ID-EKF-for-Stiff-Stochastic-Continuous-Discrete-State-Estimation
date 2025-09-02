@@ -219,14 +219,20 @@ class IDEKF:
     def predict(self, x: np.ndarray, P: np.ndarray):
         self._ensure_initialized(x, P)
 
-
-        Phi_k   = self.dm.g(x) 
-        B, V, _ = cov_to_inf(P, self._n)       
+        Phi_k   = self.dm.F(self.u.ravel())
         gamma_k = np.eye(self._n)
         Q_k = self.dm.Q
 
-        self.u, self.B, self.V = tupdate(x, B, V, Phi_k, gamma_k, Q_k)
+        u0 = np.asarray(self.u).reshape(-1,1)   
+        B0 = np.asarray(self.B).reshape(self._n, self._n)
+        V0 = np.asarray(self.V).reshape(-1)
+    
+        self.u, self.B, self.V = tupdate(u0, B0, V0, Phi_k, gamma_k, Q_k)
 
+        self.u = np.asarray(self.u).reshape(-1, 1)                 # (n,1)
+        self.B = np.asarray(self.B).reshape(self._n, self._n)      # (n,n)
+        self.V = np.asarray(self.V).reshape(-1)                    # (n,)
+        
         x_pred = self.u.ravel()
         P_pred = ensure_psd(inf_to_cov(self.V, self.B, self._n))
         return x_pred, P_pred
@@ -234,22 +240,25 @@ class IDEKF:
     def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z):
         z = np.asarray(z).reshape(-1, 1)
 
-        Hk = self.H_jac(x_pred) if callable(self.H_jac) else np.asarray(self.H_jac)
+        # Evaluate and coerce H to (p,n)
+        Hk = self.H_jac(x_pred) if callable(self.H_jac) else self.H_jac
+        Hk = np.asarray(Hk).reshape(self._m, self._n)
 
         h_wrapped = None
         if self.h_fun is not None:
             def h_wrapped(u_vec):
-                u_flat = np.asarray(u_vec).reshape(-1)
-                return np.asarray(self.h_fun(u_flat)).reshape(-1, 1)
-
-        out = mupdate(0, z, self.u, self.B, self.V, self.R, Hk, h_wrapped)
+                return np.asarray(self.h_fun(np.asarray(u_vec).reshape(-1))).reshape(-1,1)
+            
+        out = mupdate(1, z, self.u.reshape(-1,1), self.B, self.V, self.R, Hk, h_wrapped)
         self.u, self.V, self.B = out[0], out[1], out[2]
+
+        self.u = np.asarray(self.u).reshape(-1, 1)
+        self.V = np.asarray(self.V).reshape(-1)
+        self.B = np.asarray(self.B).reshape(self._n, self._n)
+
+        y = (z - (np.asarray(self.h_fun(x_pred)).reshape(-1,1) if self.h_fun else Hk @ x_pred.reshape(-1,1))).ravel()
+        S = ensure_psd(Hk @ P_pred @ Hk.T + self.R)
 
         x_upd = self.u.ravel()
         P_upd = ensure_psd(inf_to_cov(self.V, self.B, self._n))
-
-        y = (z - np.asarray(self.h_fun(x_pred)).reshape(-1,1)).ravel() if self.h_fun is not None \
-            else (z - (Hk @ x_pred.reshape(-1,1))).ravel()
-        S = ensure_psd(Hk @ P_pred @ Hk.T + self.R)
-
         return x_upd, P_upd, y, S
