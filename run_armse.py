@@ -29,7 +29,7 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
             h, H = dahlquist_h(), dahlquist_H()
             R = np.array([[0.04]])
         elif model_name == "vdp":
-            mu = 1e4
+            mu = 100
             f, Jf = vdp_f(mu), vdp_J(mu)
             G = np.array([[0.0, 0.0],
                           [0.0, 1.0]])
@@ -115,5 +115,6 @@ if __name__ == "__main__":
     print("Running ARMSE on Dahlquist...")
     run_once("dahlquist", dts, N_runs=20, seed=0)
     print("Running ARMSE on Van der Pol...")
-    run_once("vdp", dts, N_runs=20, seed=1)
+    dts_vdp = [1e-4, 2e-4, 5e-4, 1e-3]
+    run_once("vdp", dts_vdp, N_runs=20, seed=1)
     print("Done. Results in ./results/*.csv and *.png")
