@@ -21,7 +21,7 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
     results = {}
     for dt in dt_list:
         if model_name == "dahlquist":
-            mu, j = -1e2, 1
+            mu, j = -1e2, 3
             f, Jf = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G = np.array([[1.0]])
             x0 = np.array([1.0])

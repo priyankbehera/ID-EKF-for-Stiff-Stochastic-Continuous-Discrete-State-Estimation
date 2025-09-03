@@ -232,8 +232,9 @@ class IDEKF:
         self.u = np.asarray(self.u).reshape(-1, 1)                 # (n,1)
         self.B = np.asarray(self.B).reshape(self._n, self._n)      # (n,n)
         self.V = np.asarray(self.V).reshape(-1)                    # (n,)
-        
-        x_pred = self.u.ravel()
+
+        self.u = self.dm.g(x)
+        x_pred = self.u
         P_pred = ensure_psd(inf_to_cov(self.V, self.B, self._n))
         return x_pred, P_pred
 
