@@ -29,7 +29,7 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
             h, H = dahlquist_h(), dahlquist_H()
             R = np.array([[0.04]])
         elif model_name == "vdp":
-            mu = 100
+            mu = 10e3
             f, Jf = vdp_f(mu), vdp_J(mu)
             G = np.array([[0.0, 0.0],
                           [0.0, 1.0]])
