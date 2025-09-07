@@ -111,10 +111,10 @@ def run_once(model_name: str, dt_list, N_runs=20, seed=0):
     return results
 
 if __name__ == "__main__":
-    dts = [0.05, 0.1, 0.2, 0.5]
+    dts = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
     print("Running ARMSE on Dahlquist...")
     run_once("dahlquist", dts, N_runs=20, seed=0)
     print("Running ARMSE on Van der Pol...")
-    dts_vdp = [1e-4, 2e-4, 5e-4, 1e-3]
+    dts_vdp = [1e-4, 2e-4, 3e-4, 4e-4, 5e-4, 6e-4, 7e-4, 8e-4, 9e-4, 10e-4]
     run_once("vdp", dts_vdp, N_runs=20, seed=1)
     print("Done. Results in ./results/*.csv and *.png")
