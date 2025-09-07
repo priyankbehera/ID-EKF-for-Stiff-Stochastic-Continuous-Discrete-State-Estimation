@@ -152,3 +152,6 @@ if __name__ == "__main__":
     res = run_cd(args.case, args.deltas, N_runs=args.runs, seed=args.seed, outdir=args.outdir)
     for d in sorted(res.keys()):
         print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}")
+
+
+print("done")
