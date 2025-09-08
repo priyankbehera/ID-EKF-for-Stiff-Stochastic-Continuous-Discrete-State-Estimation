@@ -142,7 +142,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int = 20, seed: int = 0, outd
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="dahlquist")
-    parser.add_argument("--runs", type=int, default=20)
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--outdir", type=str, default="results")
     parser.add_argument("--deltas", type=float, nargs="*", default=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
@@ -151,3 +151,5 @@ if __name__ == "__main__":
     res = run_cd(args.case, args.deltas, N_runs=args.runs, seed=args.seed, outdir=args.outdir)
     for d in sorted(res.keys()):
         print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}")
+
+# python run_armse.py --case vdp 
