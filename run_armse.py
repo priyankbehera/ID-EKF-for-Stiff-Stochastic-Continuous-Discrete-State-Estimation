@@ -1,19 +1,18 @@
-# run_cd_benchmark.py
-# Benchmark driver for CD-EKF, CD-UKF (paper weights), CD-CKF with stiff ODEs.
-
+# run_armse.py
+# Benchmark driver for CD-EKF (matrix MDE) vs CD-UKF/CKF (SR time-update)
 from __future__ import annotations
 import os
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List
+from scipy.integrate import solve_ivp
 
 from filters import ContinuousModel, CDEKF, CDUKF, CDCKF, ensure_psd
 from models import (
     dahlquist_f, dahlquist_J, dahlquist_h, dahlquist_H, dahlquist_G, dahlquist_Qc,
     vdp_f, vdp_J, vdp_h, vdp_H, vdp_G, vdp_Qc,
 )
-from scipy.integrate import solve_ivp
 
 # ------------------------------- Truth simulation ---------------------------
 
@@ -43,28 +42,28 @@ def run_cd(case: str, deltas: List[float], N_runs: int = 20, seed: int = 0, outd
 
     for delta in deltas:
         if case == "dahlquist":
-            # First-case ill-conditioning test (linear): j=1, stiff mu
+            # First-case ill-conditioning style: linear process, stiff mu
             mu, j = -1.0e4, 1
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()
-            x0 = np.array([1.0])
+            x0 = np.array([1.0], dtype=float)
             t0, tf = 0.0, 4.0
             h, H = dahlquist_h(), dahlquist_H()
-            R = np.array([[0.04]])
+            R = np.array([[0.04]], dtype=float)
         elif case == "vdp":
             mu = 1.0e4  # stiff Van der Pol
             f, J = vdp_f(mu), vdp_J(mu)
             G, Qc = vdp_G(), vdp_Qc()
-            x0 = np.array([2.0, 0.0])
+            x0 = np.array([2.0, 0.0], dtype=float)
             t0, tf = 0.0, 2.0
             h, H = vdp_h(), vdp_H()
-            R = np.array([[0.04]])
+            R = np.array([[0.04]], dtype=float)
         else:
             raise ValueError("case must be 'dahlquist' or 'vdp'")
 
         cm = ContinuousModel(f=f, J=J, G=G, Qc=Qc)
 
-        # Filters (matrix MDE for time update in all three for a fair CD comparison)
+        # EKF: matrix MDE time update; UKF/CKF: SR time update (different dynamics)
         ekf = CDEKF(cm, h, H, R)
         ukf = CDUKF(cm, h, R)
         ckf = CDCKF(cm, h, R)
@@ -75,7 +74,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int = 20, seed: int = 0, outd
         for _ in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1 << 32))
 
-            # Truth (drift-only ODE)
+            # Truth (drift-only ODE) and sampling
             ts, xs = integrate_truth(f, t0, tf, x0, max_step=min(1e-2, delta/10))
             x_true = sample_solution(ts, xs, t_grid)
 
@@ -86,7 +85,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int = 20, seed: int = 0, outd
 
             # Run filters
             for name, flt in [("EKF", ekf), ("UKF", ukf), ("CKF", ckf)]:
-                x, P = x0.copy(), np.eye(x0.size) * 1e-2
+                x, P = x0.copy(), np.eye(x0.size, dtype=float) * 1e-2
                 x_est = [x.copy()]
                 for k in range(1, len(t_grid)):
                     t_prev, t_curr = t_grid[k-1], t_grid[k]
@@ -152,6 +151,3 @@ if __name__ == "__main__":
     res = run_cd(args.case, args.deltas, N_runs=args.runs, seed=args.seed, outdir=args.outdir)
     for d in sorted(res.keys()):
         print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}")
-
-
-print("done")

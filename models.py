@@ -1,6 +1,5 @@
-# models_cd.py
-# Test problems and measurement models (Dahlquist and Van der Pol)
-
+# models.py
+# Continuous-time test problems and measurement models
 from __future__ import annotations
 import numpy as np
 from typing import Callable
@@ -8,55 +7,68 @@ from typing import Callable
 # ------------------------------- Dahlquist ----------------------------------
 
 def dahlquist_f(mu: float, j: int) -> Callable[[float, np.ndarray], np.ndarray]:
+    """dx/dt = mu * x^j  (scalar)"""
     def f(t: float, x: np.ndarray) -> np.ndarray:
-        return np.array([mu * (x[0] ** j)])
+        return np.array([mu * (x[0] ** j)], dtype=float)
     return f
 
 def dahlquist_J(mu: float, j: int) -> Callable[[float, np.ndarray], np.ndarray]:
+    """Jacobian of Dahlquist drift wrt x."""
     def J(t: float, x: np.ndarray) -> np.ndarray:
         if j == 0:
-            return np.array([[0.0]])
-        return np.array([[mu * j * (x[0] ** (j - 1))]])
+            return np.array([[0.0]], dtype=float)
+        return np.array([[mu * j * (x[0] ** (j - 1))]], dtype=float)
     return J
 
 def dahlquist_h() -> Callable[[np.ndarray], np.ndarray]:
-    return lambda x: np.array([x[0]])
+    """Linear measurement: z = x + v"""
+    return lambda x: np.array([x[0]], dtype=float)
 
 def dahlquist_H() -> Callable[[np.ndarray], np.ndarray]:
-    return lambda x: np.array([[1.0]])
+    """Jacobian of measurement wrt state (for EKF)."""
+    return lambda x: np.array([[1.0]], dtype=float)
 
-# Continuous-time diffusion (scalar)
 def dahlquist_G() -> Callable[[float], np.ndarray]:
-    return lambda t: np.array([[1.0]])  # unit diffusion
+    """Continuous-time diffusion gain G(t) (scalar)."""
+    return lambda t: np.array([[1.0]], dtype=float)
 
 def dahlquist_Qc() -> Callable[[float], np.ndarray]:
-    return lambda t: np.array([[1.0]])  # unit intensity
+    """Continuous-time noise intensity Qc(t) (scalar)."""
+    return lambda t: np.array([[1.0]], dtype=float)
 
 # -------------------------------- Van der Pol -------------------------------
 
 def vdp_f(mu: float) -> Callable[[float, np.ndarray], np.ndarray]:
+    """Van der Pol oscillator (stiff for large mu).
+       x1' = x2
+       x2' = mu * ((1 - x1^2) * x2 - x1)
+    """
     def f(t: float, x: np.ndarray) -> np.ndarray:
-        x1, x2 = x
-        return np.array([x2, mu * ((1.0 - x1**2) * x2 - x1)])
+        x1, x2 = float(x[0]), float(x[1])
+        return np.array([x2, mu * ((1.0 - x1**2) * x2 - x1)], dtype=float)
     return f
 
 def vdp_J(mu: float) -> Callable[[float, np.ndarray], np.ndarray]:
+    """Jacobian of Van der Pol drift wrt x."""
     def J(t: float, x: np.ndarray) -> np.ndarray:
-        x1, x2 = x
+        x1, x2 = float(x[0]), float(x[1])
         return np.array([[0.0, 1.0],
-                         [-2.0 * mu * x1 * x2 - mu, mu * (1.0 - x1**2)]])
+                         [-2.0 * mu * x1 * x2 - mu, mu * (1.0 - x1**2)]], dtype=float)
     return J
 
 def vdp_h() -> Callable[[np.ndarray], np.ndarray]:
-    # measurement: z = x1 + x2
-    return lambda x: np.array([x[0] + x[1]])
+    """Linear measurement: z = x1 + x2 + v"""
+    return lambda x: np.array([x[0] + x[1]], dtype=float)
 
 def vdp_H() -> Callable[[np.ndarray], np.ndarray]:
-    return lambda x: np.array([[1.0, 1.0]])
+    """Jacobian of measurement wrt state (for EKF)."""
+    return lambda x: np.array([[1.0, 1.0]], dtype=float)
 
 def vdp_G() -> Callable[[float], np.ndarray]:
-    # noise only in the second state
-    return lambda t: np.array([[0.0, 0.0], [0.0, 1.0]])
+    """Diffusion only in second state."""
+    return lambda t: np.array([[0.0, 0.0],
+                               [0.0, 1.0]], dtype=float)
 
 def vdp_Qc() -> Callable[[float], np.ndarray]:
-    return lambda t: np.eye(2)
+    """Continuous-time noise intensity for Van der Pol."""
+    return lambda t: np.eye(2, dtype=float)
