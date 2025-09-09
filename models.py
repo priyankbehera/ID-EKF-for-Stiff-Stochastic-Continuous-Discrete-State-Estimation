@@ -56,13 +56,23 @@ def vdp_J(mu: float) -> Callable[[float, np.ndarray], np.ndarray]:
                          [-2.0 * mu * x1 * x2 - mu, mu * (1.0 - x1**2)]], dtype=float)
     return J
 
+# --- Measurement models ---
 def vdp_h() -> Callable[[np.ndarray], np.ndarray]:
-    """Linear measurement: z = x1 + x2 + v"""
+    """Linear measurement (matches the papers): z = x1 + x2 + v"""
     return lambda x: np.array([x[0] + x[1]], dtype=float)
 
 def vdp_H() -> Callable[[np.ndarray], np.ndarray]:
-    """Jacobian of measurement wrt state (for EKF)."""
+    """Jacobian for EKF when using the linear measurement above."""
     return lambda x: np.array([[1.0, 1.0]], dtype=float)
+
+# Optional: a nonlinear measurement to accentuate UKF vs CKF differences
+def vdp_h_nonlinear(c: float = 0.05) -> Callable[[np.ndarray], np.ndarray]:
+    """Nonlinear measurement: z = x1 + x2 + c * x1^4 + v"""
+    return lambda x: np.array([x[0] + x[1] + c * (x[0] ** 4)], dtype=float)
+
+def vdp_H_nonlinear(c: float = 0.05) -> Callable[[np.ndarray], np.ndarray]:
+    """Jacobian for EKF with the nonlinear measurement above."""
+    return lambda x: np.array([[1.0 + 4.0 * c * (float(x[0]) ** 3), 1.0]], dtype=float)
 
 def vdp_G() -> Callable[[float], np.ndarray]:
     """Diffusion only in second state."""
