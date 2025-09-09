@@ -220,3 +220,75 @@ class CDCKF:
         x_upd = x_pred + K @ y
         P_upd = ensure_psd(P_pred - K @ S @ K.T)
         return x_upd, P_upd, y, S
+    
+# ---- CDIDEKF: continuous–discrete Information-form EKF (uses IDKalman ops) ----
+# --- add these imports near the top of filters.py, with your other imports ---
+from IDKalman.COVtoINF import cov_to_inf
+from IDKalman.INFtoCOV import inf_to_cov
+from IDKalman.Mupdate import mupdate
+
+class CDIDEKF:
+    """
+    Continuous–discrete IDEKF:
+      - Time update: matrix MDE in covariance form (same as EKF) using solve_ivp
+      - Measurement update: information-form update via IDKalman.mupdate
+    """
+    def __init__(self, cm: ContinuousModel, h_fun, H_fun, R,
+                 rtol: float = 1e-12, atol: float = 1e-12,
+                 max_step: float = 1e-1, method: str = "Radau"):
+        self.cm = cm
+        self.h  = h_fun
+        self.H  = H_fun
+        self.R  = np.asarray(R, dtype=float)
+        self.rtol, self.atol = rtol, atol
+        self.max_step, self.method = max_step, method
+
+    def _integrate_mde(self, t0: float, t1: float, x0: np.ndarray, P0: np.ndarray):
+        n = x0.size
+        def rhs(t, y):
+            x = y[:n]
+            P = y[n:].reshape(n, n)
+            Fx = self.cm.f(t, x)
+            Jx = self.cm.J(t, x)
+            Gt = self.cm.G(t)
+            Qc = self.cm.Qc(t)
+            dP = Jx @ P + P @ Jx.T + Gt @ Qc @ Gt.T
+            return np.hstack([Fx, dP.ravel()])
+        y0 = np.hstack([x0, P0.ravel()])
+        sol = solve_ivp(rhs, (t0, t1), y0, method=self.method,
+                        rtol=self.rtol, atol=self.atol, max_step=self.max_step)
+        x1 = sol.y[:n, -1]
+        P1 = sol.y[n:, -1].reshape(n, n)
+        return x1, ensure_psd(P1)
+
+    def predict(self, t_prev: float, t_curr: float, x_prev: np.ndarray, P_prev: np.ndarray):
+        return self._integrate_mde(t_prev, t_curr, x_prev, P_prev)
+
+    def update(self, x_pred: np.ndarray, P_pred: np.ndarray, z: np.ndarray):
+        # Build linearization at x_pred
+        Hk = self.H(x_pred)
+        # Convert prior covariance to information parameters
+        B, V, _ = cov_to_inf(P_pred, P_pred.shape[0])
+        u = x_pred.reshape(-1, 1)
+
+        # Wrap nonlinear measurement if needed
+        h_wrapped = None
+        if callable(self.h):
+            def h_wrapped(u_vec):
+                return np.asarray(self.h(np.asarray(u_vec).reshape(-1))).reshape(-1, 1)
+
+        # Information-form measurement update (IDKalman)
+        z_col = np.asarray(z).reshape(-1, 1)
+        u_post, V_post, B_post, _, _ = mupdate(1, z_col, u, B, V, self.R, Hk, h_wrapped)
+
+        # Convert back to mean/covariance
+        x_upd = np.asarray(u_post).reshape(-1)
+        P_upd = ensure_psd(inf_to_cov(np.asarray(V_post).reshape(-1),
+                                      np.asarray(B_post), x_upd.size))
+
+        # Provide innovation y and S for logging (computed in covariance form)
+        zhat = (self.h(x_pred) if callable(self.h) else (Hk @ x_pred.reshape(-1,1)).ravel())
+        y = (np.asarray(z).ravel() - np.asarray(zhat).ravel())
+        S = ensure_psd(Hk @ P_pred @ Hk.T + self.R)
+
+        return x_upd, P_upd, y, S

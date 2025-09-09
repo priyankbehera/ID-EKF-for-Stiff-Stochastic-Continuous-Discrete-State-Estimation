@@ -1,5 +1,5 @@
 # run_armse.py
-# Benchmark driver for conventional CD-EKF / CD-UKF / CD-CKF (no square-root).
+# Benchmark driver for conventional CD-EKF / CD-UKF / CD-CKF / CD-IDEKF (no square-root).
 from __future__ import annotations
 import os
 import argparse
@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from typing import List
 from scipy.integrate import solve_ivp
 
-from filters import ContinuousModel, CDEKF, CDUKF, CDCKF, ensure_psd
+from filters import ContinuousModel, CDEKF, CDUKF, CDCKF, CDIDEKF, ensure_psd
 from models import (
     dahlquist_f, dahlquist_J, dahlquist_h, dahlquist_H, dahlquist_G, dahlquist_Qc,
     vdp_f, vdp_J, vdp_h, vdp_H, vdp_h_nonlinear, vdp_H_nonlinear, vdp_G, vdp_Qc,
@@ -31,7 +31,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
            profile: str = "fast", meas: str = "linear"):
     """
     profile: 'fast' (quick) or 'paper' (strict tolerances / step sizes)
-    meas   : 'linear' (matches paper) or 'nonlinear' (accentuate UKF vs CKF)
+    meas   : 'linear' (matches paper) or 'nonlinear' (accentuates UKF vs CKF)
     """
     rng0 = np.random.default_rng(seed)
     os.makedirs(outdir, exist_ok=True)
@@ -47,10 +47,10 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         vdp_tf = 2.0
     else:  # fast
         integ_method = "BDF"
-        truth_rtol, truth_atol = 1e-6, 1e-9
+        truth_rtol, truth_atol = 1e-3, 1e-3
         flt_rtol, flt_atol = 1e-6, 1e-9
         maxstep_factor = 0.5
-        vdp_mu = 1.0e3
+        vdp_mu = 1.0e2
         vdp_tf = 1.0
 
     for delta in deltas:
@@ -78,13 +78,8 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
         cm = ContinuousModel(f=f, J=J, G=G, Qc=Qc)
 
-        # Filters (conventional matrix form)
-        ekf = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-        ukf = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-        ckf = CDCKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-
         t_grid = np.arange(t0, tf + 1e-12, delta)
-        err = {k: [] for k in ["EKF", "UKF", "CKF"]}
+        err = {k: [] for k in ["EKF", "UKF", "CKF", "IDEKF"]}
 
         for _ in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1 << 32))
@@ -100,8 +95,13 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             zs = np.array([h(x_true[k]) + chol_R @ rng.normal(size=R.shape[0])
                            for k in range(len(t_grid))])
 
-            # Run filters
-            for name, flt in [("EKF", ekf), ("UKF", ukf), ("CKF", ckf)]:
+            # Fresh filter objects each run (avoid state carryover, esp. IDEKF)
+            ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta)
+            ukf   = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta)
+            ckf   = CDCKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta)
+            idekf = CDIDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta)
+
+            for name, flt in [("EKF", ekf), ("UKF", ukf), ("CKF", ckf), ("IDEKF", idekf)]:
                 x, P = x0.copy(), np.eye(x0.size, dtype=float) * 1e-2
                 x_est = [x.copy()]
                 for k in range(1, len(t_grid)):
@@ -122,11 +122,11 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         with open(csv_path, "a", newline="") as f:
             w = csv.writer(f)
             if write_header:
-                w.writerow(["delta", "EKF", "UKF", "CKF"])
-            w.writerow([delta, results[delta]["EKF"], results[delta]["UKF"], results[delta]["CKF"]])
+                w.writerow(["delta", "EKF", "UKF", "CKF", "IDEKF"])
+            w.writerow([delta, results[delta]["EKF"], results[delta]["UKF"], results[delta]["CKF"], results[delta]["IDEKF"]])
 
         # Short bar per delta
-        labels = ["EKF", "UKF", "CKF"]
+        labels = ["EKF", "UKF", "CKF", "IDEKF"]
         vals = [results[delta][lab] for lab in labels]
         plt.figure()
         plt.bar(labels, vals)
@@ -139,8 +139,8 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
     # Summary line plot
     deltas_sorted = sorted(results.keys())
-    plt.figure(figsize=(7, 5))
-    for name in ["EKF", "UKF", "CKF"]:
+    plt.figure(figsize=(8, 5))
+    for name in ["EKF", "UKF", "CKF", "IDEKF"]:
         ys = [results[d][name] for d in deltas_sorted]
         plt.plot(deltas_sorted, ys, marker="o", label=name)
     plt.xlabel("sampling period δ")
@@ -159,10 +159,10 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=1)                 # small by default (quick)
+    parser.add_argument("--runs", type=int, default=1)                
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--outdir", type=str, default="results")
-    parser.add_argument("--deltas", type=float, nargs="*", default=[0.1,0.2,0.3,0.4,0.5])
+    parser.add_argument("--deltas", type=float, nargs="*", default=[0.5])
     parser.add_argument("--profile", choices=["fast","paper"], default="fast")
     parser.add_argument("--meas", choices=["linear","nonlinear"], default="linear")
     args = parser.parse_args()
@@ -170,5 +170,4 @@ if __name__ == "__main__":
     res = run_cd(args.case, args.deltas, N_runs=args.runs, seed=args.seed,
                  outdir=args.outdir, profile=args.profile, meas=args.meas)
     for d in sorted(res.keys()):
-        print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}")
-
+        print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}, IDEKF={res[d]['IDEKF']:.6g}")
