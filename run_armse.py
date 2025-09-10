@@ -18,6 +18,7 @@ from models import (
 
 def integrate_truth(f, J, t0: float, tf: float, x0: np.ndarray, t_eval: np.ndarray,
                     rtol=1e-6, atol=1e-9, max_step=np.inf, method="BDF"):
+    """Deterministic ODE truth (not used by default; kept for reference)."""
     sol = solve_ivp(lambda t, x: f(t, x),
                     (t0, tf), x0, method=method,
                     jac=lambda t, x: J(t, x),
@@ -28,15 +29,31 @@ def integrate_truth(f, J, t0: float, tf: float, x0: np.ndarray, t_eval: np.ndarr
 def simulate_truth_sde_em(f, G, Qc, t0: float, tf: float, x0: np.ndarray,
                           t_grid: np.ndarray, max_dt: float, rng: np.random.Generator):
     """
-    Simulate dx = f(t,x) dt + G dW, with diffusion sqrt(Qd) dW, Qd = G Qc G^T.
-    Uses Euler–Maruyama with substeps so each step <= max_dt.
+    Tamed Euler–Maruyama for dx = f(t,x) dt + G(t,x) dW, with Qd(t,x)=G Qc(t) G^T.
+    - Adapts the substep to keep the **drift increment** bounded.
+    - Uses 'taming': f_tamed = f / (1 + h * ||f||).
+    - Works with G(t,x) or G(t), and Qc(t) or const.
     """
-    # Make sure Qc is 2D
-    Qc = np.atleast_2d(Qc)
-    G  = np.atleast_2d(G)
-    Qd = G @ Qc @ G.T
-    # Cholesky of PSD Qd
-    L = np.linalg.cholesky(ensure_psd(Qd))
+    def _eval_G(t, x):
+        if callable(G):
+            try:
+                val = G(t, x)        # state-dependent
+            except TypeError:
+                val = G(t)           # time-only
+        else:
+            val = G
+        return np.atleast_2d(np.asarray(val, dtype=float))
+
+    def _eval_Qc(t):
+        if callable(Qc):
+            val = Qc(t)
+        else:
+            val = Qc
+        return np.atleast_2d(np.asarray(val, dtype=float))
+
+    # Drift increment cap per substep (tuneable). Smaller => safer, more substeps.
+    DRIFT_CAP = 0.5
+    EPS = 1e-30
 
     xs = [x0.astype(float).copy()]
     t_prev = t_grid[0]
@@ -44,19 +61,46 @@ def simulate_truth_sde_em(f, G, Qc, t0: float, tf: float, x0: np.ndarray,
 
     for t_curr in t_grid[1:]:
         T = t_curr - t_prev
-        # number of EM substeps to respect absolute max_dt
-        n_sub = max(1, int(np.ceil(T / max_dt)))
-        h = T / n_sub
-        sqrt_h = np.sqrt(h)
+        remaining = T
         t = t_prev
-        for _ in range(n_sub):
-            # Drift + diffusion
+        while remaining > 0:
+            # start from max_dt, but shrink if drift too large
+            h = min(max_dt, remaining)
+
+            f_val = f(t, x)
+            f_norm = float(np.linalg.norm(f_val))
+            if f_norm * h > DRIFT_CAP:
+                h = max(DRIFT_CAP / max(f_norm, EPS), 1e-12)
+                if h > remaining:
+                    h = remaining
+
+            # evaluate diffusion at (t,x)
+            Gtx = _eval_G(t, x)
+            Qct = _eval_Qc(t)
+            Qd  = ensure_psd(Gtx @ Qct @ Gtx.T)
+
+            # Cholesky may still fail if near-semi-definite; fall back to eig
+            try:
+                L = np.linalg.cholesky(Qd)
+            except np.linalg.LinAlgError:
+                w, V = np.linalg.eigh(Qd)
+                w = np.clip(w, 0.0, None)
+                L = (V * np.sqrt(w)) @ V.T
+
+            # Tamed Euler step
+            sqrt_h = np.sqrt(h)
             xi = rng.normal(size=L.shape[1])
-            x = x + f(t, x) * h + (L @ xi) * sqrt_h
+            f_tamed = f_val / (1.0 + h * max(f_norm, EPS))
+            x = x + f_tamed * h + (L @ xi) * sqrt_h
+
             t += h
+            remaining -= h
+
         xs.append(x.copy())
         t_prev = t_curr
+
     return t_grid, np.vstack(xs)
+
 
 # ------------------------------- Benchmark core -----------------------------
 
@@ -70,9 +114,9 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     os.makedirs(outdir, exist_ok=True)
     results = {}
 
-    # profiles
+    # Profiles
     if profile == "paper":
-        integ_method = "Radau"          
+        integ_method = "Radau"          # stiff solver
         flt_rtol, flt_atol = 1e-12, 1e-12
         max_step_abs = 1.0e-1          
         vdp_mu = 1.0e4
@@ -80,13 +124,13 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     else:  # fast
         integ_method = "BDF"
         flt_rtol, flt_atol = 1e-6, 1e-9
-        max_step_abs = np.inf           
-        vdp_mu = 1.0e2
-        vdp_tf = 1.0
+        max_step_abs = 1.0e-1
+        vdp_mu = 1.0e4
+        vdp_tf = 2.0
 
     for delta in deltas:
         if case == "dahlquist":
-            mu, j = -1.0e4, 3        # linear drift with nonlinear term j=3 in paper’s test
+            mu, j = -1.0e4, 1
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()
             x0 = np.array([1.0], dtype=float)
@@ -115,16 +159,9 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         for _ in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1 << 32))
 
-            # Use absolute max substep = 0.1 in 'paper' profile to mirror MaxStep.
-            if np.ndim(G) == 0 or np.ndim(Qc) == 0:
-                # Defensive: ensure array shapes
-                G_arr = np.atleast_2d(G)
-                Qc_arr = np.atleast_2d(Qc)
-            else:
-                G_arr, Qc_arr = np.array(G, dtype=float), np.array(Qc, dtype=float)
-
+            # Stochastic truth (SDE) at the same sample grid
             _, xs = simulate_truth_sde_em(
-                f=f, G=G_arr, Qc=Qc_arr,
+                f=f, G=G, Qc=Qc,
                 t0=t0, tf=tf, x0=x0, t_grid=t_grid,
                 max_dt=max_step_abs if np.isfinite(max_step_abs) else delta,
                 rng=rng
@@ -136,7 +173,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             zs = np.array([h(x_true[k]) + chol_R @ rng.normal(size=R.shape[0])
                            for k in range(len(t_grid))])
 
-            # Fresh filter objects each run (avoid state carryover, esp. IDEKF)
+            # Fresh filter objects each run
             ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
                           max_step=max_step_abs, method=integ_method)
             ukf   = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol,
@@ -235,13 +272,13 @@ def export_armse_summary(results, outdir, case, profile, meas):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", choices=["dahlquist", "vdp"], default="dahlquist")
+    parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--outdir", type=str, default="results")
     fast = [0.1, 0.3, 0.5]
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    parser.add_argument("--deltas", type=float, nargs="*", default=fast)
+    parser.add_argument("--deltas", type=float, nargs="*", default=slow)
     parser.add_argument("--profile", choices=["fast","paper"], default="fast")
     parser.add_argument("--meas", choices=["linear","nonlinear"], default="linear")
     args = parser.parse_args()

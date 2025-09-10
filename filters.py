@@ -235,7 +235,7 @@ class CDIDEKF:
     """
     def __init__(self, cm: ContinuousModel, h_fun, H_fun, R,
                  rtol: float = 1e-12, atol: float = 1e-12,
-                 max_step: float = 1e-1, method: str = "BDF"):
+                 max_step: float = 1e-1, method: str = "Radau"):
         self.cm = cm
         self.h  = h_fun
         self.H  = H_fun
