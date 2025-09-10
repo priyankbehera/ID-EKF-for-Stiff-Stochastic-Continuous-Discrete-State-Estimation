@@ -25,6 +25,39 @@ def integrate_truth(f, J, t0: float, tf: float, x0: np.ndarray, t_eval: np.ndarr
                     rtol=rtol, atol=atol, max_step=max_step)
     return sol.t, sol.y.T
 
+def simulate_truth_sde_em(f, G, Qc, t0: float, tf: float, x0: np.ndarray,
+                          t_grid: np.ndarray, max_dt: float, rng: np.random.Generator):
+    """
+    Simulate dx = f(t,x) dt + G dW, with diffusion sqrt(Qd) dW, Qd = G Qc G^T.
+    Uses Euler–Maruyama with substeps so each step <= max_dt.
+    """
+    # Make sure Qc is 2D
+    Qc = np.atleast_2d(Qc)
+    G  = np.atleast_2d(G)
+    Qd = G @ Qc @ G.T
+    # Cholesky of PSD Qd
+    L = np.linalg.cholesky(ensure_psd(Qd))
+
+    xs = [x0.astype(float).copy()]
+    t_prev = t_grid[0]
+    x = x0.astype(float).copy()
+
+    for t_curr in t_grid[1:]:
+        T = t_curr - t_prev
+        # number of EM substeps to respect absolute max_dt
+        n_sub = max(1, int(np.ceil(T / max_dt)))
+        h = T / n_sub
+        sqrt_h = np.sqrt(h)
+        t = t_prev
+        for _ in range(n_sub):
+            # Drift + diffusion
+            xi = rng.normal(size=L.shape[1])
+            x = x + f(t, x) * h + (L @ xi) * sqrt_h
+            t += h
+        xs.append(x.copy())
+        t_prev = t_curr
+    return t_grid, np.vstack(xs)
+
 # ------------------------------- Benchmark core -----------------------------
 
 def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
@@ -39,23 +72,21 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
     # profiles
     if profile == "paper":
-        integ_method = "Radau"
-        truth_rtol, truth_atol = 1e-12, 1e-12
+        integ_method = "Radau"          
         flt_rtol, flt_atol = 1e-12, 1e-12
-        maxstep_factor = 0.1
+        max_step_abs = 1.0e-1          
         vdp_mu = 1.0e4
         vdp_tf = 1.0
     else:  # fast
         integ_method = "BDF"
-        truth_rtol, truth_atol = 1e-3, 1e-3
         flt_rtol, flt_atol = 1e-6, 1e-9
-        maxstep_factor = 0.5
+        max_step_abs = np.inf           
         vdp_mu = 1.0e2
         vdp_tf = 1.0
 
     for delta in deltas:
         if case == "dahlquist":
-            mu, j = -1.0e4, 3        # linear, ill-conditioned
+            mu, j = -1.0e4, 3        # linear drift with nonlinear term j=3 in paper’s test
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()
             x0 = np.array([1.0], dtype=float)
@@ -84,10 +115,20 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         for _ in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1 << 32))
 
-            # Truth (drift-only) at the same sample grid
-            _, xs  = integrate_truth(f, J, t0, tf, x0, t_eval=t_grid,
-                                     rtol=truth_rtol, atol=truth_atol, method=integ_method,
-                                     max_step=maxstep_factor*delta)
+            # Use absolute max substep = 0.1 in 'paper' profile to mirror MaxStep.
+            if np.ndim(G) == 0 or np.ndim(Qc) == 0:
+                # Defensive: ensure array shapes
+                G_arr = np.atleast_2d(G)
+                Qc_arr = np.atleast_2d(Qc)
+            else:
+                G_arr, Qc_arr = np.array(G, dtype=float), np.array(Qc, dtype=float)
+
+            _, xs = simulate_truth_sde_em(
+                f=f, G=G_arr, Qc=Qc_arr,
+                t0=t0, tf=tf, x0=x0, t_grid=t_grid,
+                max_dt=max_step_abs if np.isfinite(max_step_abs) else delta,
+                rng=rng
+            )
             x_true = xs
 
             # Measurements
@@ -96,10 +137,14 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
                            for k in range(len(t_grid))])
 
             # Fresh filter objects each run (avoid state carryover, esp. IDEKF)
-            ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-            ukf   = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-            ckf   = CDCKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
-            idekf = CDIDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol, max_step=maxstep_factor*delta, method=integ_method)
+            ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
+                          max_step=max_step_abs, method=integ_method)
+            ukf   = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol,
+                          max_step=max_step_abs, method=integ_method)
+            ckf   = CDCKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol,
+                          max_step=max_step_abs, method=integ_method)
+            idekf = CDIDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
+                            max_step=max_step_abs, method=integ_method)
 
             for name, flt in [("EKF", ekf), ("UKF", ukf), ("CKF", ckf), ("IDEKF", idekf)]:
                 x, P = x0.copy(), np.eye(x0.size, dtype=float) * 1e-2
@@ -190,14 +235,14 @@ def export_armse_summary(results, outdir, case, profile, meas):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=1)                
+    parser.add_argument("--case", choices=["dahlquist", "vdp"], default="dahlquist")
+    parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     fast = [0.1, 0.3, 0.5]
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     parser.add_argument("--deltas", type=float, nargs="*", default=fast)
-    parser.add_argument("--profile", choices=["fast","paper"], default="paper")
+    parser.add_argument("--profile", choices=["fast","paper"], default="fast")
     parser.add_argument("--meas", choices=["linear","nonlinear"], default="linear")
     args = parser.parse_args()
 
@@ -205,5 +250,5 @@ if __name__ == "__main__":
                  outdir=args.outdir, profile=args.profile, meas=args.meas)
     for d in sorted(res.keys()):
         print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}, IDEKF={res[d]['IDEKF']:.6g}")
-    
+
     export_armse_summary(res, args.outdir, args.case, args.profile, args.meas)
