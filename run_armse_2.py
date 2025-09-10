@@ -197,7 +197,7 @@ if __name__ == "__main__":
     fast = [0.1, 0.3, 0.5]
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     parser.add_argument("--deltas", type=float, nargs="*", default=fast)
-    parser.add_argument("--profile", choices=["fast","paper"], default="paper")
+    parser.add_argument("--profile", choices=["fast","paper"], default="fast")
     parser.add_argument("--meas", choices=["linear","nonlinear"], default="linear")
     args = parser.parse_args()
 
