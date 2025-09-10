@@ -44,7 +44,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         flt_rtol, flt_atol = 1e-12, 1e-12
         maxstep_factor = 0.1
         vdp_mu = 1.0e4
-        vdp_tf = 2.0
+        vdp_tf = 1.0
     else:  # fast
         integ_method = "BDF"
         truth_rtol, truth_atol = 1e-3, 1e-3
@@ -55,7 +55,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
     for delta in deltas:
         if case == "dahlquist":
-            mu, j = -1.0e4, 1        # linear, ill-conditioned
+            mu, j = -1.0e4, 3        # linear, ill-conditioned
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()
             x0 = np.array([1.0], dtype=float)
@@ -155,15 +155,47 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     return results
 
 # ---------------------------------- CLI -------------------------------------
+def export_armse_summary(results, outdir, case, profile, meas):
+    import csv
+    import os
+    import matplotlib.pyplot as plt
+
+    deltas_sorted = sorted(results.keys())
+    # Write one tidy CSV
+    csv_path = os.path.join(outdir, f"{case}_armse_vs_delta_{profile}_{meas}.csv")
+    with open(csv_path, "w", newline="") as f:
+        w = csv.writer(f)
+        headers = ["delta", "EKF", "UKF", "CKF", "IDEKF"]
+        w.writerow(headers)
+        for d in deltas_sorted:
+            row = [d, results[d]["EKF"], results[d]["UKF"], results[d]["CKF"], results[d]["IDEKF"]]
+            w.writerow(row)
+    print(f"Wrote {csv_path}")
+
+    # Make a single summary line plot
+    plt.figure(figsize=(8, 5))
+    for name, marker in [("EKF","o"), ("UKF","s"), ("CKF","^"), ("IDEKF","D")]:
+        ys = [results[d][name] for d in deltas_sorted]
+        plt.plot(deltas_sorted, ys, marker=marker, label=name)
+    plt.xlabel("sampling period δ")
+    plt.ylabel("ARMSE")
+    plt.title(f"ARMSE vs δ — {case} ({profile}, {meas})")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    png_path = os.path.join(outdir, f"{case}_armse_vs_delta_{profile}_{meas}.png")
+    plt.savefig(png_path, dpi=150)
+    plt.close()
+    print(f"Wrote {png_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=1)                
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--runs", type=int, default=50)                
+    parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
-    parser.add_argument("--deltas", type=float, nargs="*", default=[0.5])
-    parser.add_argument("--profile", choices=["fast","paper"], default="fast")
+    parser.add_argument("--deltas", type=float, nargs="*", default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    parser.add_argument("--profile", choices=["fast","paper"], default="paper")
     parser.add_argument("--meas", choices=["linear","nonlinear"], default="linear")
     args = parser.parse_args()
 
@@ -171,3 +203,5 @@ if __name__ == "__main__":
                  outdir=args.outdir, profile=args.profile, meas=args.meas)
     for d in sorted(res.keys()):
         print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}, IDEKF={res[d]['IDEKF']:.6g}")
+    
+    export_armse_summary(res, args.outdir, args.case, args.profile, args.meas)
