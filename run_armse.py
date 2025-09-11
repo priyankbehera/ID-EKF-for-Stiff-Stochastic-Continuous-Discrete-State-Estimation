@@ -198,7 +198,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
     parser.add_argument("--runs", type=int, default=1)          # Paper-style averaging
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     parser.add_argument("--deltas", type=float, nargs="*", default=[0.1, 0.2, 0.3, 0.4, 0.5])
     # We lock to paper profile to avoid drifting from the paper setup
