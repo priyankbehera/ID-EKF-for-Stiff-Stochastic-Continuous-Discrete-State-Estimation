@@ -45,16 +45,16 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     results = {}
 
     # Paper profile (used for both truth ODE and filter MDEs)
-    integ_method = "Radau"
-    truth_rtol, truth_atol = 1e-12, 1e-12
-    flt_rtol, flt_atol = 1e-12, 1e-12
+    integ_method = "BDF"
+    truth_rtol, truth_atol = 1e-6, 1e-6
+    flt_rtol, flt_atol = 1e-6, 1e-6
     max_step_abs = 1.0e-1
 
     # Problem setup
     for delta in deltas:
         if case == "dahlquist":
             # Nonlinear Dahlquist; choose stable negative mu and j=3
-            mu, j = -1.0e4, 5
+            mu, j = -1.0e4, 1
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()  # used only in filter covariance MDE
             x0 = np.array([1.0], dtype=float)
