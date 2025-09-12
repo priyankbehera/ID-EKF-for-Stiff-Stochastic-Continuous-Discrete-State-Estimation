@@ -78,23 +78,28 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
         # Uniform sampling grid
         t_grid = np.arange(t0, tf + 1e-12, delta)
-        err = {k: [] for k in ["EKF", "UKF", "CKF", "IDEKF"]}
 
-        for _ in range(N_runs):
+        _, xs = integrate_truth(
+            f, J, t0, tf, x0, t_eval=t_grid,
+            rtol=truth_rtol, atol=truth_atol,
+            max_step=max_step_abs, method=integ_method
+        )
+        x_true = xs
+
+        err = {k: [] for k in ["EKF", "UKF", "CKF", "IDEKF"]}
+        chol_R = np.linalg.cholesky(ensure_psd(R))
+        noises = rng0.normal(size=(N_runs, len(t_grid), R.shape[0]))  
+        run_noises = np.einsum('ij,rkj->rki', chol_R, noises)
+
+
+        for run_i in range(N_runs):
             rng = np.random.default_rng(rng0.integers(1 << 32))
 
-            # ----- Truth: deterministic drift-only ODE (matches paper) -----
-            _, xs = integrate_truth(
-                f, J, t0, tf, x0, t_eval=t_grid,
-                rtol=truth_rtol, atol=truth_atol,
-                max_step=max_step_abs, method=integ_method
-            )
-            x_true = xs
+            noises_for_run = run_noises[run_i]
 
             # ----- Measurements: z_k = h(x_true(t_k)) + v_k -----
-            chol_R = np.linalg.cholesky(ensure_psd(R))
-            zs = np.array([h(x_true[k]) + chol_R @ rng.normal(size=R.shape[0])
-                           for k in range(len(t_grid))])
+            zs = np.array([h(x_true[k]) + noises_for_run[k] for k in range(len(t_grid))])
+
 
             # ----- Filters (fresh per run) with paper integrator settings -----
             ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
