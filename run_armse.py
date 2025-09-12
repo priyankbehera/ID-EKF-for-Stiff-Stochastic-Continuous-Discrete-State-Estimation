@@ -46,8 +46,8 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
     # Paper profile (used for both truth ODE and filter MDEs)
     integ_method = "BDF"
-    truth_rtol, truth_atol = 1e-6, 1e-6
-    flt_rtol, flt_atol = 1e-6, 1e-6
+    truth_rtol, truth_atol = 1e-9, 1e-9
+    flt_rtol, flt_atol = 1e-9, 1e-9
     max_step_abs = 1.0e-1
 
     # Problem setup
@@ -197,7 +197,7 @@ def export_armse_summary(results, outdir, case):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=1)          # Paper-style averaging
+    parser.add_argument("--runs", type=int, default=10)          # Paper-style averaging
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     parser.add_argument("--deltas", type=float, nargs="*", default=[0.1, 0.2, 0.3, 0.4, 0.5])
