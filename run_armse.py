@@ -46,8 +46,8 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
     # Paper profile (used for both truth ODE and filter MDEs)
     integ_method = "BDF"
-    truth_rtol, truth_atol = 1e-9, 1e-9
-    flt_rtol, flt_atol = 1e-9, 1e-9
+    truth_rtol, truth_atol = 1e-6, 1e-6
+    flt_rtol, flt_atol = 1e-6, 1e-6
     max_step_abs = 1.0e-1
 
     # Problem setup
