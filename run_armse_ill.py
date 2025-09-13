@@ -262,14 +262,14 @@ def export_armse_summary(results: Dict[float, Dict[str, float]], outdir: str, ca
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=10)
+    parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     # Example grids
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     parser.add_argument("--deltas", type=float, nargs="*", default=slow)
     parser.add_argument("--profile", choices=["paper", "harsh"], default="paper")
-    sigma = 1e-2
+    sigma = 1e-4
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="If set (>0) and case=vdp, use ill-conditioned 2x output: [[1,1],[1,1+sigma]] with R=diag(sigma^2).")
     args = parser.parse_args()
