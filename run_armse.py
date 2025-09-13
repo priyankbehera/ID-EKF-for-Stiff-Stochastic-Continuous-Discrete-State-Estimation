@@ -205,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument("--runs", type=int, default=3)          
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
-    deltas = [0.9]
+    deltas = [1.0]
     parser.add_argument("--deltas", type=float, nargs="*", default=deltas)
     parser.add_argument("--profile", choices=["paper"], default="paper")
     args = parser.parse_args()
