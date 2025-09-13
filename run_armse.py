@@ -74,7 +74,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         else:
             raise ValueError("case must be 'dahlquist' or 'vdp'")
 
-        cm = ContinuousModel(f=f, J=J, G=G, Qc=Qc)
+        cm = ContinuousModel(f=f, J=J, G=G, Qc=Qc) 
 
         # Uniform sampling grid
         t_grid = np.arange(t0, tf + 1e-12, delta)
@@ -202,10 +202,10 @@ def export_armse_summary(results, outdir, case):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=20)          
+    parser.add_argument("--runs", type=int, default=3)          
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
-    deltas = [0.4]
+    deltas = [0.6]
     parser.add_argument("--deltas", type=float, nargs="*", default=deltas)
     parser.add_argument("--profile", choices=["paper"], default="paper")
     args = parser.parse_args()
