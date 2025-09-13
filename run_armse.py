@@ -54,7 +54,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     for delta in deltas:
         if case == "dahlquist":
             # Nonlinear Dahlquist; choose stable negative mu and j=3
-            mu, j = -1.0e4, 1
+            mu, j = -1.0e4, 3
             f, J = dahlquist_f(mu, j), dahlquist_J(mu, j)
             G, Qc = dahlquist_G(), dahlquist_Qc()  # used only in filter covariance MDE
             x0 = np.array([1.0], dtype=float)
@@ -64,7 +64,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
         elif case == "vdp":
             # Stiff Van der Pol: paper settings
-            mu = 1.0e4
+            mu = 1.0e5
             f, J = vdp_f(mu), vdp_J(mu)
             G, Qc = vdp_G(), vdp_Qc()             # process model in filters (not in truth)
             x0 = np.array([2.0, 0.0], dtype=float)
@@ -199,14 +199,15 @@ def export_armse_summary(results, outdir, case):
     plt.close()
     print(f"Wrote {png_path}")
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=3)          
+    parser.add_argument("--runs", type=int, default=1)          
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
-    deltas = [1.0]
-    parser.add_argument("--deltas", type=float, nargs="*", default=deltas)
+    slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    fast = [1.0]
+    parser.add_argument("--deltas", type=float, nargs="*", default=fast)
     parser.add_argument("--profile", choices=["paper"], default="paper")
     args = parser.parse_args()
 
