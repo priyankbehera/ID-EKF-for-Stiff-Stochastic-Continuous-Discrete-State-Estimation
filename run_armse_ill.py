@@ -76,7 +76,6 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             R = np.array([[0.04]], dtype=float)
 
         elif case == "vdp":
-            # Stiff Van der Pol; you may increase mu for extra stiffness (e.g., 1e6)
             mu = 1.0e5
             f, J = vdp_f(mu), vdp_J(mu)
             G, Qc = vdp_G(), vdp_Qc()
@@ -270,8 +269,8 @@ if __name__ == "__main__":
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     fast = [0.1]
     parser.add_argument("--deltas", type=float, nargs="*", default=fast)
-    parser.add_argument("--profile", choices=["paper", "harsh"], default="harsh")
-    sigma = 1e-4
+    parser.add_argument("--profile", choices=["paper", "harsh"], default="paper")
+    sigma = 1e-6
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="If set (>0) and case=vdp, use ill-conditioned 2x output: [[1,1],[1,1+sigma]] with R=diag(sigma^2).")
     args = parser.parse_args()
