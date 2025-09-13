@@ -267,10 +267,10 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=str, default="results")
     # Example grids
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    fast = [0.1]
+    fast = [0.5]
     parser.add_argument("--deltas", type=float, nargs="*", default=fast)
     parser.add_argument("--profile", choices=["paper", "harsh"], default="paper")
-    sigma = 1e-6
+    sigma = 1e-2
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="If set (>0) and case=vdp, use ill-conditioned 2x output: [[1,1],[1,1+sigma]] with R=diag(sigma^2).")
     args = parser.parse_args()

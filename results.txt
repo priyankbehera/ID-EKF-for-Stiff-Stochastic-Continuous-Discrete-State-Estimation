@@ -37,6 +37,7 @@ VDP, mu = 10e4
 
 # VDP, ill-conditioned measurement
 delta=0.1: EKF=7.34433e-05, UKF=0.703545, CKF=0.707317, IDEKF=7.31818e-05, sigma = 1e-2
+delta=0.1: EKF=2.01677e-06, UKF=0.703233, CKF=0.703726, IDEKF=1.99165e-06, sigma = 1e-4
 
 
 
