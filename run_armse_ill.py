@@ -1,5 +1,5 @@
 # run_armse.py
-# Paper-aligned benchmark for CD-EKF / CD-UKF / CD-CKF / CD-IDEKF (non–square-root),
+# Paper-aligned benchmark for CD-EKF / CD-IDEKF (non–square-root only),
 # with an optional ill-conditioned measurement model (per Kulikov & Kulikova, IET-CTA 2017).
 from __future__ import annotations
 import os
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from typing import List, Dict
 from scipy.integrate import solve_ivp
 
-from filters import ContinuousModel, CDEKF, CDUKF, CDCKF, CDIDEKF, ensure_psd
+from filters import ContinuousModel, CDEKF, CDIDEKF, ensure_psd
 from models import (
     dahlquist_f, dahlquist_J, dahlquist_h, dahlquist_H, dahlquist_G, dahlquist_Qc,
     vdp_f, vdp_J, vdp_h, vdp_H, vdp_G, vdp_Qc,
@@ -115,8 +115,8 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         )
         x_true = xs
 
-        # Prepare storage for ARMSEs across runs
-        err = {k: [] for k in ["EKF", "UKF", "CKF", "IDEKF"]}
+        # Prepare storage for ARMSEs across runs (EKF & IDEKF only)
+        err = {k: [] for k in ["EKF", "IDEKF"]}
 
         # Cholesky of measurement noise
         R_psd = ensure_psd(R)
@@ -125,8 +125,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 
         # Pre-generate measurement noises for reproducibility across filters
         noises = rng0.normal(size=(N_runs, len(t_grid), m))
-        # Shape-safe right-multiply by chol_R.T row-wise
-        # We want v_k ~ N(0,R). For each run/time: v = chol_R @ n, n~N(0,I)
+        # v = chol_R @ n, n~N(0,I)
         run_noises = np.einsum('ij,rtj->rti', chol_R, noises)
 
         for run_i in range(N_runs):
@@ -136,10 +135,6 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             # Filters (fresh per run) with chosen integrator settings
             ekf   = CDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
                           max_step=max_step_abs, method=integ_method)
-            ukf   = CDUKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol,
-                          max_step=max_step_abs, method=integ_method)
-            ckf   = CDCKF(cm, h, R,      rtol=flt_rtol, atol=flt_atol,
-                          max_step=max_step_abs, method=integ_method)
             idekf = CDIDEKF(cm, h, H, R, rtol=flt_rtol, atol=flt_atol,
                             max_step=max_step_abs, method=integ_method)
 
@@ -148,7 +143,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             P0 = np.eye(x0.size, dtype=float) * 1e-2
 
             # Run each filter on the same measurement sequence
-            for name, flt in [("EKF", ekf), ("UKF", ukf), ("CKF", ckf), ("IDEKF", idekf)]:
+            for name, flt in [("EKF", ekf), ("IDEKF", idekf)]:
                 xk, Pk = x_init.copy(), P0.copy()
                 x_est = [xk.copy()]
                 for k in range(1, len(t_grid)):
@@ -172,17 +167,17 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
         with open(csv_path, "a", newline="") as fcsv:
             w = csv.writer(fcsv)
             if write_header:
-                hdr = ["delta", "EKF", "UKF", "CKF", "IDEKF"]
+                hdr = ["delta", "EKF", "IDEKF"]
                 if case == "vdp" and sigma is not None and sigma > 0:
                     hdr.append("sigma")
                 w.writerow(hdr)
-            row = [delta, results[delta]["EKF"], results[delta]["UKF"], results[delta]["CKF"], results[delta]["IDEKF"]]
+            row = [delta, results[delta]["EKF"], results[delta]["IDEKF"]]
             if case == "vdp" and sigma is not None and sigma > 0:
                 row.append(sigma)
             w.writerow(row)
 
         # Short bar per delta
-        labels = ["EKF", "UKF", "CKF", "IDEKF"]
+        labels = ["EKF", "IDEKF"]
         vals = [results[delta][lab] for lab in labels]
         plt.figure()
         plt.bar(labels, vals)
@@ -200,7 +195,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
     # Summary line plot across deltas
     deltas_sorted = sorted(results.keys())
     plt.figure(figsize=(8, 5))
-    for name, marker in [("EKF","o"), ("UKF","s"), ("CKF","^"), ("IDEKF","D")]:
+    for name, marker in [("EKF","o"), ("IDEKF","D")]:
         ys = [results[d][name] for d in deltas_sorted]
         plt.plot(deltas_sorted, ys, marker=marker, label=name)
     plt.xlabel("sampling period δ")
@@ -229,19 +224,19 @@ def export_armse_summary(results: Dict[float, Dict[str, float]], outdir: str, ca
     csv_path = os.path.join(outdir, f"{case}_armse_vs_delta{suffix}.csv")
     with open(csv_path, "w", newline="") as f:
         w = csv.writer(f)
-        headers = ["delta", "EKF", "UKF", "CKF", "IDEKF"]
+        headers = ["delta", "EKF", "IDEKF"]
         if case == "vdp" and sigma is not None and sigma > 0:
             headers.append("sigma")
         w.writerow(headers)
         for d in deltas_sorted:
-            row = [d, results[d]["EKF"], results[d]["UKF"], results[d]["CKF"], results[d]["IDEKF"]]
+            row = [d, results[d]["EKF"], results[d]["IDEKF"]]
             if case == "vdp" and sigma is not None and sigma > 0:
                 row.append(sigma)
             w.writerow(row)
     print(f"Wrote {csv_path}")
 
     plt.figure(figsize=(8, 5))
-    for name, marker in [("EKF","o"), ("UKF","s"), ("CKF","^"), ("IDEKF","D")]:
+    for name, marker in [("EKF","o"), ("IDEKF","D")]:
         ys = [results[d][name] for d in deltas_sorted]
         plt.plot(deltas_sorted, ys, marker=marker, label=name)
     plt.xlabel("sampling period δ")
@@ -277,6 +272,6 @@ if __name__ == "__main__":
     res = run_cd(args.case, args.deltas, N_runs=args.runs, seed=args.seed,
                  outdir=args.outdir, profile=args.profile, sigma=args.sigma)
     for d in sorted(res.keys()):
-        print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, UKF={res[d]['UKF']:.6g}, CKF={res[d]['CKF']:.6g}, IDEKF={res[d]['IDEKF']:.6g}")
+        print(f"delta={d:g}: EKF={res[d]['EKF']:.6g}, IDEKF={res[d]['IDEKF']:.6g}")
 
     export_armse_summary(res, args.outdir, args.case, profile=args.profile, sigma=args.sigma)
