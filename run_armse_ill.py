@@ -94,7 +94,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
                         [1.0, 1.0],
                         [1.0, 1.0 + sigma]
                     ], dtype=float)
-                R = np.diag([sigma**2, sigma**2]).astype(float)
+                R = np.diag([0.01, 0.01]).astype(float)
             else:
                 # Paper’s well-conditioned linear measurement (single output): z = x1 + x2 + v
                 h, H = vdp_h(), vdp_H()
@@ -153,7 +153,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
                     x_est.append(xk.copy())
                 x_est = np.vstack(x_est)
                 # Accumulated RMSE over time (ARMSE in the paper style)
-                armse = float(np.sqrt(np.mean(np.sum((x_est - x_true) ** 2, axis=1))))
+                armse = float(np.sqrt(np.sum(np.sum((x_est - x_true) ** 2, axis=1))))
                 err[name].append(armse)
 
         # Aggregate results for this delta
@@ -257,14 +257,14 @@ def export_armse_summary(results: Dict[float, Dict[str, float]], outdir: str, ca
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--runs", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     # Example grids
     slow = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     parser.add_argument("--deltas", type=float, nargs="*", default=slow)
     parser.add_argument("--profile", choices=["paper", "harsh"], default="paper")
-    sigma = 1e-6
+    sigma = 1e-8
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="If set (>0) and case=vdp, use ill-conditioned 2x output: [[1,1],[1,1+sigma]] with R=diag(sigma^2).")
     args = parser.parse_args()
