@@ -1,12 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Run a CD-EKF vs CD-IDEKF benchmark configured so that IDEKF can show a clear advantage.
-This version fixes Qd construction (handles callable G,Qc), avoids tanh/cosh overflow,
-adds a truly iterated IDEKF update, and supports anisotropic R aligned with H's near-nullspace.
-
-Example that typically yields IDEKF < EKF (lower ARMSE):
-
 python run_idekf_advantage_fixed.py --case vdp --meas nonlin_cubic --sigma 1e-3 \
   --Rmode aniso --Rdiag 1e-4 1e-2 \
   --x0-perturb 1.2 -1.0 --deltas 0.4 0.6 0.8 \
@@ -318,38 +310,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
             row = [delta, results[delta]["EKF"], results[delta]["IDEKF"], sigma, metric]
             w.writerow(row)
 
-        # Short bar per delta
-        labels = ["EKF", "IDEKF"]
-        vals = [results[delta][lab] for lab in labels]
-        plt.figure()
-        plt.bar(labels, vals)
-        plt.ylabel("ARMSE" if metric == 'avg' else "Cumulative error (sqrt sum e^2)")
-        title = f"{case.upper()} — {meas_tag} — R:{Rmode} — {metric} (δ={delta:g}, {profile})"
-        plt.title(title)
-        plt.tight_layout()
-        png_path = os.path.join(outdir, f"{suffix}_cd_armse_delta{delta:g}.png")
-        plt.savefig(png_path, dpi=150)
-        plt.close()
-
-    # Summary line plot across deltas
-    deltas_sorted = sorted(results.keys())
-    plt.figure(figsize=(8, 5))
-    for name, marker in [("EKF","o"), ("IDEKF","D")]:
-        ys = [results[d][name] for d in deltas_sorted]
-        plt.plot(deltas_sorted, ys, marker=marker, label=name)
-    plt.xlabel("sampling period δ")
-    plt.ylabel("ARMSE" if metric == 'avg' else "Cumulative error (sqrt sum e^2)")
-    title = f"CD benchmark — {case} — {meas_tag} — R:{Rmode} ({profile}, {metric})"
-    if truth_noise:
-        title += f" (+ truth noise q={truth_qscale:g})"
-    plt.title(title)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
-    suffix = f"{case}_{meas_tag}_{Rmode}_{metric}"
-    png_path = os.path.join(outdir, f"{suffix}_cd_summary.png")
-    plt.savefig(png_path, dpi=150)
-    plt.close()
+        
 
     return results
 
