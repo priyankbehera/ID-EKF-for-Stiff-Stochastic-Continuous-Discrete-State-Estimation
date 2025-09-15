@@ -328,7 +328,7 @@ if __name__ == "__main__":
     # Measurement controls
     parser.add_argument("--meas", choices=["paper", "ill", "nonlin_cubic", "nonlin_tanh"], default="ill",
                         help="paper=scalar linear; ill=2x linear ill-conditioned; nonlin_* = 2x nonlinear ill-conditioned")
-    sigma = 1e-6
+    sigma = 1e-4
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="Near-collinearity strength (ill/nonlin use [[1,1],[1,1+sigma]]).")
     parser.add_argument("--Rmode", choices=["diag", "aniso"], default="diag",
