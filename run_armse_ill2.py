@@ -318,7 +318,7 @@ def run_cd(case: str, deltas: List[float], N_runs: int, seed: int, outdir: str,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=["dahlquist", "vdp"], default="vdp")
-    parser.add_argument("--runs", type=int, default=200)
+    parser.add_argument("--runs", type=int, default=50)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--outdir", type=str, default="results")
     deltas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     # Measurement controls
     parser.add_argument("--meas", choices=["paper", "ill", "nonlin_cubic", "nonlin_tanh"], default="ill",
                         help="paper=scalar linear; ill=2x linear ill-conditioned; nonlin_* = 2x nonlinear ill-conditioned")
-    sigma = 1e-8
+    sigma = 1e-6
     parser.add_argument("--sigma", type=float, default=sigma,
                         help="Near-collinearity strength (ill/nonlin use [[1,1],[1,1+sigma]]).")
     parser.add_argument("--Rmode", choices=["diag", "aniso"], default="diag",
