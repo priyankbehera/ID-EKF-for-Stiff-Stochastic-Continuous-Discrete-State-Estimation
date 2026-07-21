@@ -1,9 +1,9 @@
 """
-python run_idekf_advantage_fixed.py --case vdp --meas nonlin_cubic --sigma 1e-3 \
+python run_armse_ill2.py --case vdp --meas nonlin_cubic --sigma 1e-8 \
   --Rmode aniso --Rdiag 1e-4 1e-2 \
-  --x0-perturb 1.2 -1.0 --deltas 0.4 0.6 0.8 \
+  --x0-perturb 1.5 -1.0 --deltas 0.1 0.2 0.3 0.4 0.5 0.6 0.6 0.8 \
   --truth-noise --truth-qscale 10 \
-  --runs 100 --metric avg --idekf-iter-max 5 --idekf-iter-tol 1e-10
+  --runs 1000 --metric avg --idekf-iter-max 5 --idekf-iter-tol 1e-10
 """
 from __future__ import annotations
 import os
