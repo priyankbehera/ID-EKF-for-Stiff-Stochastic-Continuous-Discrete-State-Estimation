@@ -39,14 +39,14 @@ python run_paired_filter_significance.py \
   --Rdiag 1e-4 1e-2 \
   --x0-perturb 1.5 -1.0 \
   --P0-scale 1e-2 \
-  --deltas 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 \
+  --deltas 0.01 0.02 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 \
   --primary-deltas 0.4 0.5 0.7 0.8 1.0 \
   --truth-noise \
   --truth-qscale 10 \
   --num-seeds 100 \
   --seed-start 1 \
   --metric avg \
-  --idekf-iter-max 5 \
+  --idekf-iter-max 10 \
   --idekf-iter-tol 1e-10 \
   --bootstrap-reps 10000 \
   --permutation-reps 100000
@@ -2538,10 +2538,15 @@ def parse_arguments() -> argparse.Namespace:
         type=float,
         nargs="+",
         default=[
+            0.01, 
+            0.02,
+            0.05, 
             0.1,
+            0.12,
+            0.15,
+            0.18,
             0.2,
             0.3,
-            0.4,
             0.5,
             0.6,
             0.7,
